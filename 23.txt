@@ -1,0 +1,91 @@
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+function findWpConfigFiles($base) {
+    $configs = [];
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($base, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+
+    foreach ($iterator as $file) {
+        if ($file->isFile() && $file->getFilename() === 'wp-config.php') {
+            $configs[] = $file->getRealPath();
+        }
+    }
+
+    return $configs;
+}
+
+function getDbCredentials($configPath) {
+    $content = @file_get_contents($configPath);
+    if ($content === false) {
+        throw new Exception("Cannot read $configPath");
+    }
+
+    $creds = [];
+
+    if (preg_match("/define\s*\(\s*'DB_NAME'\s*,\s*'([^']+)'\s*\)/", $content, $m)) $creds['DB_NAME'] = $m[1];
+    else throw new Exception("DB_NAME not found in $configPath");
+
+    if (preg_match("/define\s*\(\s*'DB_USER'\s*,\s*'([^']+)'\s*\)/", $content, $m)) $creds['DB_USER'] = $m[1];
+    else throw new Exception("DB_USER not found in $configPath");
+
+    if (preg_match("/define\s*\(\s*'DB_PASSWORD'\s*,\s*'([^']*)'\s*\)/", $content, $m)) $creds['DB_PASSWORD'] = $m[1];
+    else throw new Exception("DB_PASSWORD not found in $configPath");
+
+    if (preg_match("/define\s*\(\s*'DB_HOST'\s*,\s*'([^']+)'\s*\)/", $content, $m)) $creds['DB_HOST'] = $m[1];
+    else $creds['DB_HOST'] = 'localhost';
+
+    if (preg_match("/table_prefix\s*=\s*['\"]([^'\"]+)['\"]/", $content, $m)) {
+        $creds['PREFIX'] = $m[1];
+    } else {
+        $creds['PREFIX'] = 'wp_';
+    }
+
+    return $creds;
+}
+
+function getSiteUrl($creds) {
+    $mysqli = @new mysqli($creds['DB_HOST'], $creds['DB_USER'], $creds['DB_PASSWORD'], $creds['DB_NAME']);
+
+    if ($mysqli->connect_error) {
+        throw new Exception("DB Error: " . $mysqli->connect_error);
+    }
+
+    $table = $creds['PREFIX'] . 'options';
+    $query = "SELECT option_value FROM `$table` WHERE option_name = 'siteurl' LIMIT 1";
+    $result = $mysqli->query($query);
+
+    if (!$result) {
+        throw new Exception("Query Error: " . $mysqli->error . " in query: $query");
+    }
+
+    if ($row = $result->fetch_assoc()) {
+        return $row['option_value'];
+    }
+
+    throw new Exception("siteurl not found in table $table");
+}
+
+// === MAIN ===
+$baseDir = '/var/www/html/';
+$configFiles = findWpConfigFiles($baseDir);
+
+echo "<pre>WordPress Site URLs\n====================\n";
+
+foreach ($configFiles as $configPath) {
+    echo "📄 $configPath\n";
+    try {
+        $creds = getDbCredentials($configPath);
+        $siteurl = getSiteUrl($creds);
+        echo "🌐 siteurl: $siteurl\n\n";
+    } catch (Exception $e) {
+        echo "⚠️ Error: " . $e->getMessage() . "\n\n";
+        continue;
+    }
+}
+
+echo "</pre>";
